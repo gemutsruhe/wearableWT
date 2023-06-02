@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">WearableWT</string>
+    <string name="permission">BluetoothPermission</string>
+</resources>
