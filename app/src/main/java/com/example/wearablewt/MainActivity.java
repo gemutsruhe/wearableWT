@@ -34,25 +34,25 @@ public class MainActivity extends AppCompatActivity {
         String DB_NAME = "weightTraining.db";
 
         try{
-            // 디렉토리가 없으면, 디렉토리를 먼저 생성한다.
             File fDir = new File( DB_PATH );
             if( !fDir.exists() ) { fDir.mkdir(); }
 
             String strOutFile = DB_PATH + DB_NAME;
+            File dbFile = new File(strOutFile);
+            if(!dbFile.exists()) {
+                InputStream inputStream = getApplicationContext().getAssets().open( DB_NAME );
+                OutputStream outputStream = new FileOutputStream( strOutFile );
 
-            InputStream inputStream = getApplicationContext().getAssets().open( DB_NAME );
-            OutputStream outputStream = new FileOutputStream( strOutFile );
+                byte[] mBuffer = new byte[1024];
+                int mLength;
+                while( ( mLength = inputStream.read( mBuffer) ) > 0 ) {
+                    outputStream.write( mBuffer, 0, mLength );
+                }
 
-            byte[] mBuffer = new byte[1024];
-            int mLength;
-            while( ( mLength = inputStream.read( mBuffer) ) > 0 ) {
-                outputStream.write( mBuffer, 0, mLength );
+                outputStream.flush();
+                outputStream.close();
+                inputStream.close();
             }
-
-            outputStream.flush();
-            outputStream.close();
-            inputStream.close();
-
         }catch( Exception e ) {
             e.printStackTrace();
         }

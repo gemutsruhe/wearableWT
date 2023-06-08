@@ -5,7 +5,20 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanFilter;
+import android.bluetooth.le.ScanResult;
+import android.bluetooth.le.ScanSettings;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -14,6 +27,8 @@ import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
+import android.os.ParcelUuid;
 import android.os.SystemClock;
 import android.util.Log;
 import android.util.Pair;
@@ -33,6 +48,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.os.HandlerCompat;
 
 
 import com.gun0912.tedpermission.PermissionListener;
@@ -41,9 +57,11 @@ import com.gun0912.tedpermission.normal.TedPermission;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -53,6 +71,7 @@ public class TrainingRecordActivity extends AppCompatActivity {
     TextView routineSettingText;
     TextView addTrainingTextView;
     TextView startDailyTrainingText;
+    TextView settingBluetoothDeviceTextView;
     DBHelper dbHelper;
     LinearLayout trainingListLayout;
     HashMap<String, String> trainingPartMap;
@@ -64,12 +83,12 @@ public class TrainingRecordActivity extends AppCompatActivity {
     ActivityResultLauncher<Intent> startActivityResultAddSet;
     Pair<ArrayList<String>, ArrayList<ArrayList<Record>>> trainingRecord;
 
+    ArrayList<String> trainingNameList;
     private BluetoothAdapter bluetoothAdapter;
     private Set<BluetoothDevice> devices; // 블루투스 디바이스 데이터 셋
     private BluetoothDevice bluetoothDevice; // 블루투스 디바이스
 
     Handler bluetoothHandler;
-    ConnectedBluetoothThread connectedBluetoothThread;
     BluetoothSocket bluetoothSocket;
 
     final static int BT_REQUEST_ENABLE = 1;
@@ -77,6 +96,10 @@ public class TrainingRecordActivity extends AppCompatActivity {
     final static int BT_CONNECTING_STATUS = 3;
     final static UUID BT_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
+    private boolean scanning = false;
+
+    String selectedDeviceAddress;
+    Bluetooth bluetooth;
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -88,29 +111,69 @@ public class TrainingRecordActivity extends AppCompatActivity {
         findView();
         initVar();
 
-        trainingRecord = dbHelper.getDailyTrainingRecord(selectedDate);
+        //trainingRecord = dbHelper.getDailyTrainingRecord(selectedDate);
+        updateTrainingRecord();
+        settingBluetoothDeviceTextView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                selectBluetoothDevice();
+            }
+        });
 
-        trainingDateText.setText(selectedDate);
+
+        BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String action = intent.getAction();
+                Log.e("TEST", action);
+                if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(action)) {
+                    //Toast.makeText(TrainingRecordActivity.this, "Bluetooth Connected3", Toast.LENGTH_LONG);
+                    Log.e("TEST", "Receiver");
+                    //BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                    //String deviceAddress = device.getAddress();
+                    //abortBroadcast();
+                }
+            }
+        };
+
         startDailyTrainingText.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-
-                if (ActivityCompat.checkSelfPermission(TrainingRecordActivity.this, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                    tedPermission();
-                } else {
-                    Toast.makeText(TrainingRecordActivity.this, "Permission Granted", Toast.LENGTH_SHORT).show();
+                if(trainingListLayout.getChildCount() <= 1) return ;
+                trainingNameList = new ArrayList<>();
+                for (int i = 0; i < trainingListLayout.getChildCount() - 1; i++) {
+                    TextView trainingNameTextView = trainingListLayout.getChildAt(i).findViewById(R.id.trainingNameText1);
+                    String trainingName = trainingNameTextView.getText().toString();
+                    trainingNameList.add(trainingName);
                 }
-                selectBluetoothDevice();
 
-                if(connectedBluetoothThread != null && bluetoothDevice != null) {
-                    for(int i = 0; i < trainingListLayout.getChildCount(); i++) {
-                        TextView trainingNameTextView = trainingListLayout.getChildAt(i).findViewById(R.id.trainingNameText1);
-                        String trainingName = trainingNameTextView.getText().toString();
-                        connectedBluetoothThread.write(trainingNameIdMap.get(trainingName));
+                SharedPreferences connectedWearable = getSharedPreferences("connectedWearable", Activity.MODE_PRIVATE);
+                selectedDeviceAddress = connectedWearable.getString("address", null);
+
+                if(selectedDeviceAddress == null) {
+                    Toast.makeText(TrainingRecordActivity.this, "웨어러블 기기를 선택해주세요", Toast.LENGTH_LONG);
+                    return ;
+                }
+                Log.e("TEST", selectedDeviceAddress);
+                Thread thread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+
+                        ArrayList<String> trainingIdList = new ArrayList<>();
+                        for(int i = 0; i < trainingNameList.size(); i++) {
+                            trainingIdList.add(trainingNameIdMap.get(trainingNameList.get(i)));
+                        }
+                        bluetooth = new Bluetooth(TrainingRecordActivity.this, selectedDeviceAddress, trainingIdList, selectedDate);
+                        bluetooth.scanDevices();
                     }
-                    connectedBluetoothThread.write("startTraining");
+                });
+
+                thread.start();
+                try {
+                    thread.join();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
                 }
-                //bluetoothAdaptor
             }
         });
 
@@ -179,23 +242,33 @@ public class TrainingRecordActivity extends AppCompatActivity {
         });
     }
 
+    @Override
+    public void onBackPressed() {
+        Intent intent = new Intent();
+        setResult(Activity.RESULT_OK, intent);
+        super.onBackPressed();
+    }
+
     private void findView() {
         trainingDateText = findViewById(R.id.trainingDateTextView);
         routineSettingText = findViewById(R.id.routineSettingTextView);
         addTrainingTextView = findViewById(R.id.addTrainingOnRecord);
         trainingListLayout = findViewById(R.id.trainingListLayout);
         startDailyTrainingText = findViewById(R.id.startDailyTrainingTextView);
+        settingBluetoothDeviceTextView = findViewById(R.id.settingBluetoothDeviceTextView);
     }
 
     private void initVar() {
         dbHelper = new DBHelper(TrainingRecordActivity.this, 1);
         trainingNameIdMap = dbHelper.getTrainingNameIdMap();
         trainingIdNameMap = dbHelper.getTrainingIdNameMap();
+        trainingDateText.setText(selectedDate);
     }
 
     public void updateTrainingRecord() {
         ViewGroup parent = trainingListLayout;
-        trainingListLayout.removeAllViews();
+        //trainingListLayout.removeAllViews();
+        trainingListLayout.removeViews(0, trainingListLayout.getChildCount() - 1);
 
         LayoutInflater inflater = LayoutInflater.from(parent.getContext());
 
@@ -205,9 +278,65 @@ public class TrainingRecordActivity extends AppCompatActivity {
         ArrayList<ArrayList<Record>> recordMapList = trainingRecord.second;
 
         for (int i = 0; i < trainingIdList.size(); i++) {
-            View view = inflater.inflate(R.layout.training_record_cell, parent, true);
-        }
+            int sequenceNum = i;
+            String trainingId = trainingIdList.get(i);
+            View view = inflater.inflate(R.layout.training_record_cell, parent, false);
+            parent.addView(view, i);
 
+            ImageView trainingImageView = view.findViewById(R.id.trainingImageView);
+            Bitmap resized = DataProcessing.getTrainingImage(this, trainingId);
+            trainingImageView.setImageBitmap(resized);
+
+            TextView trainingNameTextView = view.findViewById(R.id.trainingNameText1);
+            trainingNameTextView.setText(trainingIdNameMap.get(trainingId));
+
+            LinearLayout setsLinearLayout = view.findViewById(R.id.setsLinearLayout);
+            ArrayList<Record> recordList = recordMapList.get(i);
+
+            for (int j = 0; j < recordList.size(); j++) {
+                View set = inflater.inflate(R.layout.set_cell, setsLinearLayout, false);
+                Record record = recordList.get(j);
+
+                //View set = setsLinearLayout.getChildAt(j);
+                TextView weightNumTextView1 = set.findViewById(R.id.weightNumTextView1);
+                TextView repeatTextView1 = set.findViewById(R.id.repeatTextView1);
+                TextView setNumTextView = set.findViewById(R.id.setNumTextView);
+                ImageButton deleteSetButton = set.findViewById(R.id.deleteSetButton);
+
+                setNumTextView.setText(String.valueOf(record.getSetsNum()) + "세트");
+                weightNumTextView1.setText(String.valueOf(record.getWeight()) + record.getUnit());
+                repeatTextView1.setText(String.valueOf(record.getRepeat()) + "회");
+
+                deleteSetButton.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        dbHelper.deleteRecord(selectedDate, trainingId, sequenceNum, record.getSetsNum());
+                        updateTrainingRecord();
+                    }
+                });
+            }
+
+            TextView addSetTextView = view.findViewById(R.id.addSetTextView);
+            addSetTextView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Intent intent = new Intent(getApplicationContext(), AddSetActivity.class);
+
+                    intent.putExtra("dateId", selectedDate);
+                    intent.putExtra("trainingId", trainingId);
+                    intent.putExtra("trainingName", trainingIdNameMap.get(trainingId));
+
+                    intent.putExtra("sequenceNum", sequenceNum);
+                    intent.putExtra("setsNum", setsLinearLayout.getChildCount() + 1);
+                    intent.putExtra("weight", 0);
+                    intent.putExtra("repeat", 0);
+                    intent.putExtra("unit", "kg");
+                    intent.putExtra("unitWeight", 5);
+
+                    startActivityResultAddSet.launch(intent);
+                }
+            });
+        }
         for (int i = 0; i < trainingIdList.size(); i++) {
             String trainingId = trainingIdList.get(i);
             View cell = parent.getChildAt(i);
@@ -272,65 +401,54 @@ public class TrainingRecordActivity extends AppCompatActivity {
     }
 
     public void selectBluetoothDevice() {
-
-        SharedPreferences connectedWearable = getSharedPreferences("connectedWearable", Activity.MODE_PRIVATE);
-        String address = connectedWearable.getString("address", null);
+        tedPermission();
 
         if (ActivityCompat.checkSelfPermission(TrainingRecordActivity.this, android.Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-            //ActivityCompat.requestPermissions( TrainingRecordActivity.this, new String[]{android.Manifest.permission.BLUETOOTH_CONNECT},
+
         }
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         devices = bluetoothAdapter.getBondedDevices();
 
-        if (address != null && connectDevice(address)) {
-            Toast.makeText(TrainingRecordActivity.this, "자동 연결 완료", Toast.LENGTH_SHORT).show();
+        int pairedDeviceCount = devices.size();
+        if (pairedDeviceCount == 0) {
+            Toast.makeText(TrainingRecordActivity.this, "페어링 되어있는 디바이스가 없습니다", Toast.LENGTH_SHORT).show();
         } else {
-            int pairedDeviceCount = devices.size();
-            if (pairedDeviceCount == 0) {
-                Toast.makeText(TrainingRecordActivity.this, "페어링 되어있는 디바이스가 없습니다", Toast.LENGTH_SHORT).show();
-            } else {
-                AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                builder.setTitle("페어링 블루투스 디바이스 목록");
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("페어링 블루투스 디바이스 목록");
 
-                List<String> bluetoothDeviceNameList = new ArrayList<>();
-                List<String> bluetoothDeviceAddressList = new ArrayList<>();
+            List<String> bluetoothDeviceNameList = new ArrayList<>();
+            List<String> bluetoothDeviceAddressList = new ArrayList<>();
 
-                for (BluetoothDevice bluetoothDevice : devices) {
-                    bluetoothDeviceNameList.add(bluetoothDevice.getName());
-                    bluetoothDeviceAddressList.add(bluetoothDevice.getAddress());
+            for (BluetoothDevice bluetoothDevice : devices) {
+                bluetoothDeviceNameList.add(bluetoothDevice.getName());
+                bluetoothDeviceAddressList.add(bluetoothDevice.getAddress());
+            }
+            bluetoothDeviceNameList.add("취소");
+
+            final CharSequence[] charSequences = bluetoothDeviceNameList.toArray(new CharSequence[bluetoothDeviceNameList.size()]);
+            bluetoothDeviceNameList.toArray(new CharSequence[bluetoothDeviceNameList.size()]);
+
+            builder.setItems(charSequences, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    CharSequence cs = bluetoothDeviceAddressList.get(which);
+                    SharedPreferences connectedWearable = getSharedPreferences("connectedWearable", Activity.MODE_PRIVATE);
+                    SharedPreferences.Editor editor = connectedWearable.edit();
+                    editor.putString("address", cs.toString());
+                    editor.apply();
                 }
-                bluetoothDeviceNameList.add("취소");
-                // List를 CharSequence 배열로 변경
-                final CharSequence[] charSequences = bluetoothDeviceNameList.toArray(new CharSequence[bluetoothDeviceNameList.size()]);
-                bluetoothDeviceNameList.toArray(new CharSequence[bluetoothDeviceNameList.size()]);
-                // 해당 아이템을 눌렀을 때 호출 되는 이벤트 리스너
-                builder.setItems(charSequences, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        Toast.makeText(TrainingRecordActivity.this, charSequences[which], Toast.LENGTH_LONG).show();
-                        CharSequence cs = bluetoothDeviceAddressList.get(which);
-                        connectDevice(cs.toString());
+            });
+            Handler mHandler = new Handler(Looper.getMainLooper());
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    // 사용하고자 하는 코드
+                    AlertDialog alertDialog = builder.create();
+                    alertDialog.show();
                     }
-                });
-                AlertDialog alertDialog = builder.create();
-                alertDialog.show();
+                    }, 0);
             }
-        }
-    }
-
-    private boolean connectDevice(String address) {
-        for (BluetoothDevice device : devices) {
-            if (address.equals(device.getAddress())) {
-                bluetoothDevice = device;
-                SharedPreferences connectedWearable = getSharedPreferences("connectedWearable", Activity.MODE_PRIVATE);
-                SharedPreferences.Editor editor = connectedWearable.edit();
-                editor.putString("address", address);
-                editor.apply();
-                return true;
-            }
-        }
-
-        return false;
+        //}
     }
 
     private void tedPermission() {
@@ -338,112 +456,21 @@ public class TrainingRecordActivity extends AppCompatActivity {
         PermissionListener permissionlistener = new PermissionListener() {
             @Override
             public void onPermissionGranted() {
-                Toast.makeText(TrainingRecordActivity.this, "Permission Granted", Toast.LENGTH_SHORT).show();
             }
 
             @Override
             public void onPermissionDenied(List<String> deniedPermissions) {
-                Toast.makeText(TrainingRecordActivity.this, "Permission Denied\n" + deniedPermissions.toString(), Toast.LENGTH_SHORT).show();
             }
         };
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            requestPermissions(
-                    new String[]{
-                            Manifest.permission.BLUETOOTH,
-                            Manifest.permission.BLUETOOTH_SCAN,
-                            Manifest.permission.BLUETOOTH_ADVERTISE,
-                            Manifest.permission.BLUETOOTH_CONNECT
-                    },
-                    1);
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            requestPermissions(
-                    new String[]{
-                            Manifest.permission.BLUETOOTH
-                    },
-                    1);
-        }
 
-        /*TedPermission.create()
+        TedPermission.create()
                 .setPermissionListener(permissionlistener)
                 .setDeniedMessage("If you reject permission,you can not use this service\n\nPlease turn on permissions at [Setting] > [Permission]")
                 .setPermissions(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN, Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
-                .check();*/
+                .check();
+
+
     }
 
-
-    void connectSelectedDevice(String selectedDeviceName) {
-        try {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                return;
-            }
-            bluetoothSocket = bluetoothDevice.createRfcommSocketToServiceRecord(BT_UUID);
-            bluetoothSocket.connect();
-            connectedBluetoothThread = new ConnectedBluetoothThread(bluetoothSocket);
-            connectedBluetoothThread.start();
-            bluetoothHandler.obtainMessage(BT_CONNECTING_STATUS, 1, -1).sendToTarget();
-        } catch (IOException e) {
-            Toast.makeText(getApplicationContext(), "블루투스 연결 중 오류가 발생했습니다.", Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private class ConnectedBluetoothThread extends Thread {
-        private final BluetoothSocket mmSocket;
-        private final InputStream mmInStream;
-        private final OutputStream mmOutStream;
-
-        public ConnectedBluetoothThread(BluetoothSocket socket) {
-            mmSocket = socket;
-            InputStream tmpIn = null;
-            OutputStream tmpOut = null;
-
-            try {
-                tmpIn = socket.getInputStream();
-                tmpOut = socket.getOutputStream();
-            } catch (IOException e) {
-                Toast.makeText(getApplicationContext(), "소켓 연결 중 오류가 발생했습니다.", Toast.LENGTH_LONG).show();
-            }
-
-            mmInStream = tmpIn;
-            mmOutStream = tmpOut;
-        }
-        public void run() {
-            byte[] buffer = new byte[1024];
-            int bytes;
-
-            while (true) {
-                try {
-                    bytes = mmInStream.available();
-                    if (bytes != 0) {
-                        SystemClock.sleep(100);
-                        bytes = mmInStream.available();
-                        bytes = mmInStream.read(buffer, 0, bytes);
-                        bluetoothHandler.obtainMessage(BT_MESSAGE_READ, bytes, -1, buffer).sendToTarget();
-                        if(buffer.toString().compareTo("finishTraining") == 0) {
-                            return ;
-                        } else {
-
-                        }
-                }
-                } catch (IOException e) {
-                    break;
-                }
-            }
-        }
-        public void write(String str) {
-            byte[] bytes = str.getBytes();
-            try {
-                mmOutStream.write(bytes);
-            } catch (IOException e) {
-                Toast.makeText(getApplicationContext(), "데이터 전송 중 오류가 발생했습니다.", Toast.LENGTH_LONG).show();
-            }
-        }
-        public void cancel() {
-            try {
-                mmSocket.close();
-            } catch (IOException e) {
-                Toast.makeText(getApplicationContext(), "소켓 해제 중 오류가 발생했습니다.", Toast.LENGTH_LONG).show();
-            }
-        }
-    }
 
 }

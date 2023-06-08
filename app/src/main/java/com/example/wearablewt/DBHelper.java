@@ -174,6 +174,7 @@ public class DBHelper extends SQLiteOpenHelper {
         while(cursor.moveToNext()) {
             String trainingId = cursor.getString(0);
             trainingIdList.add(trainingId);
+            Log.e("TEST", trainingId);
             recordList.add(new ArrayList<>());
         }
 
@@ -186,7 +187,7 @@ public class DBHelper extends SQLiteOpenHelper {
             double weight = cursor.getDouble(2);
             String unit = cursor.getString(3);
             int repeat = cursor.getInt(4);
-
+            Log.e("TEST", sequenceNum + " " + setsNum + " " + weight + " " + unit + " " + repeat);
             Record record = new Record(setsNum, weight, unit, repeat);
             recordList.get(sequenceNum).add(record);
         }

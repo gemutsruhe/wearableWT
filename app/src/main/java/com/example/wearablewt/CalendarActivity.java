@@ -1,5 +1,6 @@
 package com.example.wearablewt;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
@@ -16,6 +17,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -63,6 +68,7 @@ public class CalendarActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 selectedMonth = selectedMonth.minusMonths(1);
+                selectedDate.minusMonths(1);
                 setCalendarView();
             }
         });
@@ -71,6 +77,7 @@ public class CalendarActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 selectedMonth = selectedMonth.plusMonths(1);
+                selectedDate.plusMonths(1);
                 setCalendarView();
             }
         });
@@ -104,28 +111,30 @@ public class CalendarActivity extends AppCompatActivity {
             }
         });*/
 
+        ActivityResultLauncher<Intent> startActivityResultTraining = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                new ActivityResultCallback<ActivityResult>() {
+                    @Override
+                    public void onActivityResult(ActivityResult result) {
+                        if (result.getResultCode() == Activity.RESULT_OK) {
+                            setTrainingSummaryView();
+                        }
+                    }
+                }
+        );
+
         modifyDailyTrainingText.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Intent intent = new Intent(getApplicationContext(), TrainingRecordActivity.class);
 
-                String yyyy = yearMonthText.getText().toString().substring(0,4);
-                String MMdd = selectedDateText.getText().toString();
+                String yyyyMM = yearMonthText.getText().toString();
+                String dd = selectedDateText.getText().toString().substring(3,5);
 
-                intent.putExtra("selectedDate", yyyy + "-" + MMdd);
-                startActivity(intent);
+                intent.putExtra("selectedDate", yyyyMM + "-" + dd);
+                startActivityResultTraining.launch(intent);
             }
         });
-
-        /*
-        trainingSummaryListLayout.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(getApplicationContext(), TrainingRecordActivity.class);
-                intent.putExtra("selectedDate", selectedDateText.getText().toString());
-                startActivity(intent);
-            }
-        });*/
     }
 
     private void findView() {
@@ -163,10 +172,10 @@ public class CalendarActivity extends AppCompatActivity {
         parent.removeAllViews();
         LayoutInflater inflater = LayoutInflater.from(parent.getContext());
 
-        String yyyy = yearMonthText.getText().toString().substring(0,4);
-        String MMdd = selectedDateText.getText().toString();
+        String yyyyMM = yearMonthText.getText().toString();
+        String dd = selectedDateText.getText().toString().substring(3,5);
 
-        String date = yyyy + "-" + MMdd;
+        String date = yyyyMM + "-" + dd;
 
         ArrayList<Pair<String, Integer>> dailyTrainingSummary = dbHelper.getDailyTrainingSummary(date);
         if(dailyTrainingSummary == null || dailyTrainingSummary.size() == 0) return ;
