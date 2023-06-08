@@ -184,6 +184,8 @@ public class TrainingRecordActivity extends AppCompatActivity {
                     public void onActivityResult(ActivityResult result) {
                         if (result.getResultCode() == Activity.RESULT_OK) {
                             Intent data = result.getData();
+                            String routineName = data.getStringExtra("selectedRoutineName");
+                            dbHelper.addDailyRoutine(selectedDate, routineName);
                             updateTrainingRecord();
                         }
                     }
@@ -337,7 +339,7 @@ public class TrainingRecordActivity extends AppCompatActivity {
                 }
             });
         }
-        for (int i = 0; i < trainingIdList.size(); i++) {
+        /*for (int i = 0; i < trainingIdList.size(); i++) {
             String trainingId = trainingIdList.get(i);
             View cell = parent.getChildAt(i);
             int sequenceNum = i;
@@ -397,7 +399,7 @@ public class TrainingRecordActivity extends AppCompatActivity {
                     startActivityResultAddSet.launch(intent);
                 }
             });
-        }
+        }*/
     }
 
     public void selectBluetoothDevice() {
@@ -431,18 +433,19 @@ public class TrainingRecordActivity extends AppCompatActivity {
             builder.setItems(charSequences, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
-                    CharSequence cs = bluetoothDeviceAddressList.get(which);
-                    SharedPreferences connectedWearable = getSharedPreferences("connectedWearable", Activity.MODE_PRIVATE);
-                    SharedPreferences.Editor editor = connectedWearable.edit();
-                    editor.putString("address", cs.toString());
-                    editor.apply();
+                    if(which < bluetoothDeviceNameList.size() - 1) {
+                        CharSequence cs = bluetoothDeviceAddressList.get(which);
+                        SharedPreferences connectedWearable = getSharedPreferences("connectedWearable", Activity.MODE_PRIVATE);
+                        SharedPreferences.Editor editor = connectedWearable.edit();
+                        editor.putString("address", cs.toString());
+                        editor.apply();
+                    }
                 }
             });
             Handler mHandler = new Handler(Looper.getMainLooper());
             mHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
-                    // 사용하고자 하는 코드
                     AlertDialog alertDialog = builder.create();
                     alertDialog.show();
                     }

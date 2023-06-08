@@ -6,6 +6,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -193,24 +194,23 @@ public class RoutineActivity extends AppCompatActivity {
         while(keys.hasNext()){
             String key = keys.next();
             View routineLayout = routineListLayout.getChildAt(count);
-
             TextView routineNameTextView = routineLayout.findViewById(R.id.routineNameTextView);
             routineNameTextView.setText(key);
             count++;
             ArrayList<String> trainingIdList = routineNameTrainingIdMap.get(key);
 
             ViewGroup routineTrainingListLayout = routineLayout.findViewById(R.id.routineTrainingListLayout);
-
-            routineTrainingListLayout.setOnClickListener(new View.OnClickListener() {
+            Log.e("TEST", routineNameTextView.getText().toString());
+            routineNameTextView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    if(selectedRoutine == routineLayout) {
+                    if(routineLayout.equals(selectedRoutine)) {
                         selectedRoutine.setBackgroundColor(Color.WHITE);
                         selectedRoutine = null;
                     } else {
                         if(selectedRoutine != null) selectedRoutine.setBackgroundColor(Color.WHITE);
                         selectedRoutine = routineLayout;
-                        routineLayout.setBackgroundResource(R.drawable.selected_layout_border);
+                        selectedRoutine.setBackgroundResource(R.drawable.selected_layout_border);
                     }
                 }
             });

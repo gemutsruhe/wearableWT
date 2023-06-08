@@ -29,6 +29,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 public class CalendarActivity extends AppCompatActivity {
 
@@ -46,6 +47,8 @@ public class CalendarActivity extends AppCompatActivity {
     Button prevBtn;
     Button nextBtn;
 
+    HashMap<String, String> trainingIdNameMap;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -60,6 +63,7 @@ public class CalendarActivity extends AppCompatActivity {
         getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
         densityDPI = displayMetrics.densityDpi;
         dbHelper = new DBHelper(CalendarActivity.this, 1);
+        trainingIdNameMap = dbHelper.getTrainingIdNameMap();
         setCalendarView();
         setSelectedDate();
         setTrainingSummaryView();
@@ -102,14 +106,6 @@ public class CalendarActivity extends AppCompatActivity {
                 setTrainingSummaryView();
             }
         });
-        /*temp.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(getApplicationContext(), TrainingRecordActivity.class);
-                intent.putExtra("selectedDate", selectedDateText.getText());
-                startActivity(intent);
-            }
-        });*/
 
         ActivityResultLauncher<Intent> startActivityResultTraining = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -188,7 +184,7 @@ public class CalendarActivity extends AppCompatActivity {
             TextView trainingNameTextView = trainingSummary.findViewById(R.id.summaryTrainingNameTextView);
             TextView setsNumTextView = trainingSummary.findViewById(R.id.summarySetsNumTextView);
 
-            trainingNameTextView.setText(dailyTrainingSummary.get(i).first);
+            trainingNameTextView.setText(trainingIdNameMap.get(dailyTrainingSummary.get(i).first));
             setsNumTextView.setText(dailyTrainingSummary.get(i).second + "Set");
         }
 

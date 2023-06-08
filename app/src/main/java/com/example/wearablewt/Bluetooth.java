@@ -53,6 +53,7 @@ public class Bluetooth {
     String date;
 
     ArrayList<String> trainingIdList;
+
     Bluetooth(Context context, String selectedDeviceAddress, ArrayList<String> trainingIdList, String date) {
         this.context = context;
         this.selectedDeviceAddress = selectedDeviceAddress;
@@ -105,14 +106,12 @@ public class Bluetooth {
         public void onScanResult(int callbackType, ScanResult result) {
             super.onScanResult(callbackType, result);
             if (connected == false && result.getDevice().getAddress().compareTo(selectedDeviceAddress) == 0) {
-
                 if(connGATT(context, result.getDevice()) == true) {
                     connected = true;
                 } else {
 
                 }
-            } else return;
-
+            }
         }
     };
 
@@ -260,6 +259,8 @@ public class Bluetooth {
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
 
             super.onCharacteristicWrite(gatt, characteristic, status);
+
+
             if(status == BluetoothGatt.GATT_SUCCESS) {
 
             } else {

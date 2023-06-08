@@ -149,6 +149,23 @@ public class DBHelper extends SQLiteOpenHelper {
         return trainingSummaryList;
     }
 
+    public void addDailyRoutine(String date, String routineName) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT routine_id FROM routine WHERE routine_name = '" + routineName + "'", null);
+        cursor.moveToNext();
+        String routineId = cursor.getString(0);
+        ArrayList<String> trainingIdList = new ArrayList<>();
+
+        cursor = db.rawQuery("SELECT training_id FROM routineSequence WHERE routine_id = " + routineId+ " ORDER BY sequence_num", null);
+        while(cursor.moveToNext()) {
+            String trainingId = cursor.getString(0);
+            trainingIdList.add(trainingId);
+        }
+        db.close();
+
+        addDailyTrainingList(date, trainingIdList);
+    }
+
     public void addDailyTrainingList(String date, ArrayList<String> trainingIdList) {
 
         SQLiteDatabase dbRead = getReadableDatabase();
@@ -174,7 +191,6 @@ public class DBHelper extends SQLiteOpenHelper {
         while(cursor.moveToNext()) {
             String trainingId = cursor.getString(0);
             trainingIdList.add(trainingId);
-            Log.e("TEST", trainingId);
             recordList.add(new ArrayList<>());
         }
 
@@ -187,7 +203,6 @@ public class DBHelper extends SQLiteOpenHelper {
             double weight = cursor.getDouble(2);
             String unit = cursor.getString(3);
             int repeat = cursor.getInt(4);
-            Log.e("TEST", sequenceNum + " " + setsNum + " " + weight + " " + unit + " " + repeat);
             Record record = new Record(setsNum, weight, unit, repeat);
             recordList.get(sequenceNum).add(record);
         }

@@ -17,7 +17,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="prevMonth" />
+            android:textSize="18dp"
+            android:text="prev"
+            android:textColor="@color/black"
+            android:background="#00ff0000"/>
 
         <Button
             android:id="@+id/yearMonthTextView"
@@ -34,7 +37,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="nextMonth" />
+            android:textSize="18dp"
+            android:text="next"
+            android:background="#00ff0000"
+            android:textColor="@color/black"/>
     </LinearLayout>
 
     <LinearLayout

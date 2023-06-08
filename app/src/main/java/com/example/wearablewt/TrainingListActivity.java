@@ -6,6 +6,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -69,6 +70,7 @@ public class TrainingListActivity extends AppCompatActivity {
         ViewGroup parent = trainingPartListLayout;
         LayoutInflater inflater = LayoutInflater.from(parent.getContext());
         ArrayList<String> partList = dbHelper.getTrainingPartList();
+
         for(int i = 0; i < partList.size(); i++) {
             View view = inflater.inflate(R.layout.part_cell, parent, true);
         }
@@ -81,6 +83,7 @@ public class TrainingListActivity extends AppCompatActivity {
                 public void onClick(View v) {
                     if(selectedPart.compareTo(partNameTextView.getText().toString()) != 0) {
                         selectedPart = partNameTextView.getText().toString();
+
                         addTrainingList();
                     }
                 }
